@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FINCAISSE</title>
+<style>
+:root{--bg:#edf1ee;--ink:#10241f;--mut:#5d6f69;--line:#cdd8d3;--acc:#0b5d4b;--on:#fff;--gold:#e2b53b;--bad:#b3261e;--card:#fff;font-family:"Avenir Next","Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);display:flex;min-height:100vh}
+h1,h2,h3{margin:0}h2{font-size:1.6rem;margin-bottom:1rem}h3{margin-bottom:.6rem}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;padding:.45rem .8rem}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
+button:disabled,.prod[disabled]{opacity:.45;cursor:not-allowed}
+.btn{background:var(--acc);color:var(--on);border-color:var(--acc);width:100%;padding:.7rem;font-weight:600;margin-top:.8rem}
+input,select{font:inherit;padding:.5rem;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);width:100%}
+aside{width:230px;background:var(--ink);color:#dfe9e5;padding:1.2rem;display:flex;flex-direction:column;gap:.3rem;flex-shrink:0}
+aside h1{font-size:1.3rem;margin-bottom:1.2rem;color:#fff;letter-spacing:.02em}
+aside nav{display:flex;flex-direction:column;gap:.2rem;flex:1}
+aside nav button{background:none;border:0;color:inherit;text-align:left;padding:.6rem .7rem;border-radius:6px}
+aside nav button.on{background:var(--acc);color:#fff}
+.who{font-size:.9rem;display:flex;flex-direction:column;gap:.5rem}.who small{opacity:.7}
+main{flex:1;padding:1.5rem;min-width:0}
+.split{display:grid;grid-template-columns:1fr 340px;gap:1.2rem;align-items:start}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.7rem}
+.prod{display:flex;flex-direction:column;gap:.3rem;text-align:left;padding:.9rem;min-height:96px;border-radius:8px}
+.prod b{font-size:1rem}.prod span{color:var(--acc);font-weight:700}.low{color:var(--bad)}
+.ticket{background:#fff;border:1px dashed #8aa097;border-radius:4px;padding:1.1rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92rem}
+.ticket h3{font-family:"Avenir Next","Segoe UI",system-ui,sans-serif}
+.line{display:flex;justify-content:space-between;gap:.5rem;padding:.35rem 0;border-bottom:1px dotted var(--line)}
+.line span:first-child{flex:1}.line button{padding:0 .5rem}
+.total{display:flex;justify-content:space-between;font-weight:700;font-size:1.15rem;padding-top:.7rem}
+.mut,.empty{color:var(--mut)}.list button{display:block;width:100%;text-align:left;margin-bottom:.5rem;padding:.8rem}
+.list button.on{border-color:var(--acc);box-shadow:inset 4px 0 var(--acc)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:1rem}.card small{color:var(--mut)}.card b{display:block;font-size:1.6rem;margin-top:.3rem}
+table{width:100%;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden}
+th,td{padding:.5rem;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}td input{min-width:70px}
+.ghost{border-color:transparent;color:var(--bad)}
+.change{font-size:1.4rem;font-weight:700;margin:.6rem 0}.ok{color:var(--acc)}.bad{color:var(--bad)}
+.login{margin:auto;width:min(380px,92vw);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:1.6rem;display:flex;flex-direction:column;gap:.7rem}
+#toast{position:fixed;bottom:1rem;right:1rem;background:var(--ink);color:#fff;padding:.7rem 1rem;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.show{opacity:1}#toast.err{background:var(--bad)}
+@media(max-width:800px){body{flex-direction:column}aside{width:auto}aside nav{flex-direction:row;flex-wrap:wrap}.split{grid-template-columns:1fr}}
+@media print{aside,.noprint,.list,h2{display:none!important}.split{display:block}body{background:#fff}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<body><div id="app" style="display:contents"></div><div id="toast" role="status"></div>
+<script>
+let tok=sessionStorage.tok||'',me=null,P=[],cart={},tab='',sel=null,rec=null,timer;
+const $=s=>document.querySelector(s),F=n=>Number(n).toLocaleString('fr-FR')+' FCFA';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const toast=(m,e)=>{const t=$('#toast');t.textContent=m;t.className='show'+(e?' err':'');setTimeout(()=>t.className='',3200)};
+const api=async(p,m='GET',b)=>{const r=await fetch('/api/'+p,{method:m,headers:{'Content-Type':'application/json',...(tok?{Authorization:'Bearer '+tok}:{})},body:b?JSON.stringify(b):undefined});const j=await r.json();if(r.status==401&&tok){out();}if(!r.ok)throw Error(j.error||'Erreur');return j};
+const A=o=>Object.entries(o).forEach(([k,f])=>window[k]=async(...a)=>{try{await f(...a)}catch(e){toast(e.message,1)}});
+const NAV={ADMIN:[['dash','Tableau de bord'],['sale','Prise de commande'],['till','Caisse'],['prod','Produits et stock'],['usr','Utilisateurs'],['log','Journal d’audit']],ACCUEIL:[['sale','Prise de commande']],CAISSE:[['till','Caisse']]};
+const V={};
+
+function loginView(){$('#app').innerHTML=`<div class=login><h1>FINCAISSE</h1><p class=mut>Gestion de caisse sécurisée</p>
+<label>Nom d’utilisateur<input id=u autocomplete=username></label><label>Mot de passe<input id=p type=password autocomplete=current-password></label>
+<label><input type=checkbox style="width:auto" onchange="$('#p').type=this.checked?'text':'password'"> Afficher le mot de passe</label>
+<button class=btn onclick="login()">Se connecter</button><button onclick="setup()">Créer le premier administrateur</button></div>`}
+function shell(){$('#app').innerHTML=`<aside><h1>FINCAISSE</h1><nav>${NAV[me.role].map(([k,l])=>`<button id="n-${k}" onclick="go('${k}')">${l}</button>`).join('')}</nav>
+<div class=who><span>${esc(me.user)}<br><small>${me.role}</small></span><button onclick="out()">Déconnexion</button></div></aside><main id=v></main>`;go(NAV[me.role][0][0])}
+A({
+ login:async()=>{const r=await api('login','POST',{username:$('#u').value,password:$('#p').value});tok=sessionStorage.tok=r.token;me=r;shell()},
+ setup:async()=>{await api('setup','POST',{username:$('#u').value,password:$('#p').value});toast('Administrateur créé. Connectez-vous.')},
+ go:async t=>{tab=t;clearInterval(timer);document.querySelectorAll('aside nav button').forEach(b=>b.classList.toggle('on',b.id=='n-'+t));await V[t]()},
+ add:async id=>{const p=P.find(x=>x.id==id);if((cart[id]||0)>=+p.stock)return toast('Stock maximum atteint',1);cart[id]=(cart[id]||0)+1;drawSale()},
+ chg:async(id,d)=>{const p=P.find(x=>x.id==id);cart[id]+=d;if(cart[id]<=0)delete cart[id];if(cart[id]>+p.stock)cart[id]=+p.stock;drawSale()},
+ send:async()=>{await api('orders','POST',{items:Object.entries(cart).map(([product_id,qty])=>({product_id:+product_id,qty}))});cart={};toast('Commande envoyée à la caisse');await V.sale()},
+ pick:async id=>{sel=id;rec=null;await V.till()},
+ calc:async()=>{const t=+$('#due').dataset.t,g=+$('#given').value,d=g-t;$('#chg').className='change '+(d>=0?'ok':'bad');$('#chg').textContent=d>=0?'Monnaie à rendre : '+F(d):'Il manque '+F(-d);$('#pay').disabled=!(g>=t)},
+ exact:async()=>{$('#given').value=$('#due').dataset.t;calc()},
+ pay:async()=>{const r=await api('pay','POST',{order_id:sel,given:+$('#given').value});rec=await api('order?id='+sel);rec.change=r.change;sel=null;toast('Paiement enregistré');await V.till()},
+ next:async()=>{rec=null;await V.till()},
+ saveP:async b=>{const i=b.closest('tr').querySelectorAll('input');await api('products','POST',{id:+b.closest('tr').dataset.id||0,name:i[0].value,price:+i[1].value,stock:+i[2].value,threshold:+i[3].value});toast('Produit enregistré');await V.prod()},
+ delP:async id=>{if(confirm('Supprimer ce produit ?')){await api('products?id='+id,'DELETE');await V.prod()}},
+ addU:async()=>{await api('users','POST',{username:$('#nu').value,password:$('#np').value,role:$('#nr').value});toast('Compte créé');await V.usr()},
+ togU:async id=>{await api('users/toggle','POST',{id});await V.usr()},
+});
+window.out=()=>{tok=sessionStorage.tok='';me=null;clearInterval(timer);loginView()};
+
+V.sale=async()=>{P=await api('products');drawSale()};
+function drawSale(){const ids=Object.keys(cart),tot=ids.reduce((s,i)=>s+cart[i]*P.find(p=>p.id==i).price,0);
+$('#v').innerHTML=`<h2>Prise de commande</h2><div class=split><div class=grid>${P.map(p=>`<button class=prod ${+p.stock<1?'disabled':''} onclick="add(${p.id})"><b>${esc(p.name)}</b><span>${F(p.price)}</span><small class="${+p.stock<=+p.threshold?'low':''}">Stock : ${p.stock}</small></button>`).join('')||'<p class=empty>Aucun produit. Un administrateur doit en ajouter.</p>'}</div>
+<div class=ticket><h3>Commande en cours</h3>${ids.map(i=>{const p=P.find(x=>x.id==i);return`<div class=line><span>${esc(p.name)}</span><span><button onclick="chg(${i},-1)">−</button> ${cart[i]} <button onclick="chg(${i},1)">+</button></span><span>${F(cart[i]*p.price)}</span></div>`}).join('')||'<p class=empty>Touchez un produit pour l’ajouter.</p>'}
+<div class=total><span>Total</span><span>${F(tot)}</span></div><button class=btn ${ids.length?'':'disabled'} onclick="send()">Envoyer à la caisse</button></div></div>`}
+
+V.till=async()=>{let right='<p class=empty>Choisissez une commande en attente.</p>';
+ if(rec)right=`<div class=ticket><h3>FINCAISSE</h3><p class=mut>Ticket n° ${rec.order.id}, le ${rec.order.paid_at}<br>Vendeur : ${esc(rec.order.seller)}</p>${rec.items.map(i=>`<div class=line><span>${i.qty} × ${esc(i.name)}</span><span>${F(i.qty*i.price)}</span></div>`).join('')}<div class=total><span>Total</span><span>${F(rec.order.total)}</span></div><div class=line><span>Remis</span><span>${F(rec.order.given)}</span></div><div class=line><span>Rendu</span><span>${F(rec.change)}</span></div><p>Merci de votre achat.</p></div><div class=noprint><button class=btn onclick="print()">Imprimer le reçu</button><button class=btn onclick="next()">Commande suivante</button></div>`;
+ else if(sel){const d=await api('order?id='+sel);right=`<div class=ticket><h3>Commande n° ${d.order.id}</h3>${d.items.map(i=>`<div class=line><span>${i.qty} × ${esc(i.name)}</span><span>${F(i.qty*i.price)}</span></div>`).join('')}<div class=total id=due data-t="${d.order.total}"><span>À payer</span><span>${F(d.order.total)}</span></div>
+<label>Montant remis (FCFA)<input id=given type=number min=0 inputmode=numeric oninput="calc()"></label><div id=chg class=change></div><button onclick="exact()">Montant exact</button><button id=pay class=btn disabled onclick="pay()">Encaisser</button></div>`}
+ $('#v').innerHTML=`<h2>Caisse</h2><div class=split><div class=list id=pend></div><div>${right}</div></div>`;
+ const fill=async()=>{const L=await api('orders?status=PENDING');$('#pend')&&($('#pend').innerHTML=L.map(o=>`<button class="${o.id==sel?'on':''}" onclick="pick(${o.id})"><b>Commande n° ${o.id}</b> — ${F(o.total)}<br><small class=mut>${o.seller}, ${o.created_at}</small></button>`).join('')||'<p class=empty>Aucune commande en attente.</p>')};
+ await fill();timer=setInterval(()=>fill().catch(()=>{}),6000)};
+
+V.dash=async()=>{const s=await api('stats');$('#v').innerHTML=`<h2>Tableau de bord</h2><div class=cards><div class=card><small>Chiffre d’affaires du jour</small><b>${F(s.today)}</b></div><div class=card><small>Ventes du jour</small><b>${s.today_count}</b></div><div class=card><small>Chiffre d’affaires du mois</small><b>${F(s.month)}</b></div><div class=card><small>Panier moyen (mois)</small><b>${F(s.avg_basket)}</b></div></div>
+<h3>Stock bas</h3><table><tr><th>Produit<th>Stock<th>Seuil</tr>${s.low_stock.map(p=>`<tr><td>${esc(p.name)}<td class=bad>${p.stock}<td>${p.threshold}</tr>`).join('')||'<tr><td colspan=3 class=empty>Aucun produit sous son seuil.</tr>'}</table>`};
+V.prod=async()=>{P=await api('products');$('#v').innerHTML=`<h2>Produits et stock</h2><table><tr><th>Produit<th>Prix (FCFA)<th>Stock<th>Seuil d’alerte<th></tr>${[...P,{id:'',name:'',price:'',stock:'',threshold:5}].map(p=>`<tr data-id="${p.id}"><td><input value="${esc(p.name)}" placeholder="Nouveau produit"><td><input type=number min=0 value="${p.price}"><td><input type=number min=0 value="${p.stock}"><td><input type=number min=0 value="${p.threshold}"><td><button onclick="saveP(this)">${p.id?'Enregistrer':'Ajouter'}</button>${p.id?`<button class=ghost onclick="delP(${p.id})">Supprimer</button>`:''}</tr>`).join('')}</table>`};
+V.usr=async()=>{const U=await api('users');$('#v').innerHTML=`<h2>Utilisateurs</h2><table><tr><th>Nom<th>Rôle<th>État<th></tr>${U.map(u=>`<tr><td>${esc(u.username)}<td>${u.role}<td>${u.active==1?'Actif':'Désactivé'}<td><button onclick="togU(${u.id})">${u.active==1?'Désactiver':'Réactiver'}</button></tr>`).join('')}
+<tr><td><input id=nu placeholder="Nom d’utilisateur"><td><select id=nr><option value=ACCUEIL>ACCUEIL<option value=CAISSE>CAISSE<option value=ADMIN>ADMIN</select><td><input id=np type=password placeholder="8 caractères minimum"><td><button onclick="addU()">Créer le compte</button></tr></table>`};
+V.log=async()=>{const L=await api('audit');$('#v').innerHTML=`<h2>Journal d’audit</h2><table><tr><th>Date<th>Utilisateur<th>Action</tr>${L.map(l=>`<tr><td>${l.ts}<td>${esc(l.user)}<td>${esc(l.action)}</tr>`).join('')}</table>`};
+
+(async()=>{if(tok){try{me=await api('me');return shell()}catch{}}loginView()})();
+</script>
+</body>
+</html>
