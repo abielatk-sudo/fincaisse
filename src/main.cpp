@@ -7,7 +7,8 @@ using Row = map<string, string>;
 using crow::json::wvalue;
 
 static sqlite3* db;
-static crow::SimpleApp app;  // mono-thread : pas de verrou nécessaire
+static crow::SimpleApp app;
+static mutex mtx;  // mono-thread : pas de verrou nécessaire
 
 static vector<Row> q(const string& sql, vector<string> p = {}) {
   sqlite3_stmt* s; vector<Row> out;
@@ -52,6 +53,7 @@ static void createUser(const string& u, const string& pw, const string& role) {
 using H = function<crow::response(const crow::request&, const Sess&, const crow::json::rvalue&)>;
 static void api(const string& path, crow::HTTPMethod m, vector<string> roles, H h) {
   app.route_dynamic(path).methods(m)([roles, h](const crow::request& req) {
+    lock_guard<mutex> lk(mtx);
     try {
       Sess s{};
       if (!roles.empty()) {
