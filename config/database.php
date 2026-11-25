@@ -13,6 +13,14 @@ final class Database
         if ($url !== '' && str_starts_with($url, 'mysql://')) {
             $parts = parse_url($url);
             if (is_array($parts)) {
+                parse_str((string)($parts['query'] ?? ''), $query);
+                $sslMode = strtoupper((string)($query['ssl-mode'] ?? $query['sslmode'] ?? ''));
+                $sslCa = getenv('FINCAISSE_DB_SSL_CA') ?: '';
+                if ($sslCa === '' && in_array($sslMode, ['REQUIRED', 'VERIFY_CA', 'VERIFY_IDENTITY'], true)) {
+                    if (is_file('/etc/ssl/certs/ca-certificates.crt')) {
+                        $sslCa = '/etc/ssl/certs/ca-certificates.crt';
+                    }
+                }
                 return [
                     'host' => $parts['host'] ?? '127.0.0.1',
                     'port' => (string)($parts['port'] ?? 3306),
@@ -20,7 +28,8 @@ final class Database
                     'user' => urldecode((string)($parts['user'] ?? 'root')),
                     'pass' => urldecode((string)($parts['pass'] ?? '')),
                     'socket' => '',
-                    'ssl_ca' => getenv('FINCAISSE_DB_SSL_CA') ?: '',
+                    'ssl_ca' => $sslCa,
+                    'ssl_required' => $sslCa !== '' || in_array($sslMode, ['REQUIRED', 'VERIFY_CA', 'VERIFY_IDENTITY'], true),
                 ];
             }
         }
@@ -64,6 +73,9 @@ final class Database
         ];
         if (!empty($cfg['ssl_ca']) && defined('PDO::MYSQL_ATTR_SSL_CA')) {
             $options[PDO::MYSQL_ATTR_SSL_CA] = $cfg['ssl_ca'];
+        }
+        if (!empty($cfg['ssl_required']) && defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+            $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
         }
 
         $dbName = preg_replace('/[^a-zA-Z0-9_-]/', '', $cfg['name']) ?: 'fincaisse';
