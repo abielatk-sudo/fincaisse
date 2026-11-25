@@ -1,13 +1,21 @@
-FROM ubuntu:24.04 AS build
-RUN apt-get update && apt-get install -y build-essential cmake pkg-config git ca-certificates libsqlite3-dev libsodium-dev
-WORKDIR /app
-COPY . .
-RUN mkdir -p build && cd build && cmake .. && make
+FROM php:8.2-apache
 
-FROM ubuntu:24.04
-RUN apt-get update && apt-get install -y libsqlite3-0 libsodium23 && rm -rf /var/lib/apt/lists/*
-WORKDIR /app/build
-COPY --from=build /app/build/fincaisse .
-COPY --from=build /app/build/public ./public
-ENV DB_PATH=/data/fincaisse.db
-CMD ["./fincaisse"]
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    g++ cmake make \
+    && docker-php-ext-install pdo_mysql mysqli \
+    && a2enmod rewrite \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /var/www/html
+COPY . .
+
+RUN cmake -S . -B build \
+    && cmake --build build \
+    && chmod +x bin/fincaisse_engine docker/entrypoint.sh
+
+RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf \
+    && printf '<Directory /var/www/html/public>\nOptions -Indexes\nAllowOverride All\nCGIPassAuth On\nFallbackResource /index.php\n</Directory>\n' > /etc/apache2/conf-available/fincaisse.conf \
+    && a2enconf fincaisse
+
+EXPOSE 80
+CMD ["/var/www/html/docker/entrypoint.sh"]

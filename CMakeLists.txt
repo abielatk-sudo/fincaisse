@@ -1,16 +1,18 @@
-cmake_minimum_required(VERSION 3.20)
-project(fincaisse CXX)
+cmake_minimum_required(VERSION 3.16)
+project(fincaisse_engine LANGUAGES CXX)
+
 set(CMAKE_CXX_STANDARD 20)
-include(FetchContent)
-FetchContent_Declare(asio GIT_REPOSITORY https://github.com/chriskohlhoff/asio GIT_TAG asio-1-30-2)
-FetchContent_MakeAvailable(asio)
-file(DOWNLOAD https://github.com/CrowCpp/Crow/releases/download/v1.2.0/crow_all.h ${CMAKE_BINARY_DIR}/inc/crow_all.h)
-find_package(SQLite3 REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(SODIUM REQUIRED libsodium)
-add_executable(fincaisse src/main.cpp)
-target_include_directories(fincaisse PRIVATE ${CMAKE_BINARY_DIR}/inc ${asio_SOURCE_DIR}/asio/include ${SODIUM_INCLUDE_DIRS})
-target_compile_definitions(fincaisse PRIVATE ASIO_STANDALONE)
-target_link_directories(fincaisse PRIVATE ${SODIUM_LIBRARY_DIRS})
-target_link_libraries(fincaisse PRIVATE SQLite::SQLite3 ${SODIUM_LIBRARIES} pthread)
-add_custom_command(TARGET fincaisse POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/public $<TARGET_FILE_DIR:fincaisse>/public)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_executable(fincaisse_engine cpp/fincaisse_engine.cpp)
+
+if (MSVC)
+  target_compile_options(fincaisse_engine PRIVATE /W4 /O2)
+else()
+  target_compile_options(fincaisse_engine PRIVATE -Wall -Wextra -O2)
+endif()
+
+set_target_properties(fincaisse_engine PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
